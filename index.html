@@ -384,6 +384,7 @@
     #print-area .saldo-summary { display:flex; gap:18px; margin-bottom:12px; font-size:11px; }
     #print-area .saldo-summary-item b { display:block; font-size:13px; }
     #print-area .badge { border:1px solid #999; padding:1px 6px; border-radius:99px; }
+    .no-print { display:none !important; }
   }
 
   @media (max-width:900px) {
@@ -725,7 +726,7 @@
                 <thead><tr>
                   <th>Data</th><th>Produto</th><th>Cliente</th><th style="text-align:right">Qtd</th>
                   <th style="text-align:right">Preço unit.</th><th style="text-align:right">Total</th>
-                  <th>Pagamento</th><th>Observação</th>
+                  <th>Pagamento</th><th>Observação</th><th class="no-print" style="text-align:center;width:60px">Ações</th>
                 </tr></thead>
                 <tbody id="pg-tbody"></tbody>
               </table>
@@ -765,7 +766,7 @@
               <table style="table-layout:auto;">
                 <thead><tr>
                   <th>Data</th><th>Produto</th><th>Fornecedor</th><th style="text-align:right">Qtd</th>
-                  <th style="text-align:right">Custo unit.</th><th style="text-align:right">Total</th><th>Observação</th>
+                  <th style="text-align:right">Custo unit.</th><th style="text-align:right">Total</th><th>Observação</th><th class="no-print" style="text-align:center;width:60px">Ações</th>
                 </tr></thead>
                 <tbody id="cp-tbody"></tbody>
               </table>
@@ -895,7 +896,7 @@
     <div class="form-row">
       <div class="form-group"><label>Cliente <span class="hint">opcional</span></label><input id="v-cliente" placeholder="Nome do cliente"></div>
       <div class="form-group">
-        <label>Forma de pagamento <span class="hint">opcional</span></label>
+        <label>Forma de pagamento <span class="hint" style="color:var(--red);font-weight:600;">obrigatório</span></label>
         <button type="button" class="btn pay-btn-select" id="v-pagamento-btn" onclick="togglePagamentoBox()">💳 Selecionar forma de pagamento</button>
         <input type="hidden" id="v-pagamento" value="">
       </div>
@@ -1355,6 +1356,11 @@ async function registrarVenda(){
   const formaPagamento=document.getElementById('v-pagamento').value||null;
   if(!prodId){alert('Selecione um produto.');return;}
   if(qty<=0){alert('Informe uma quantidade válida.');return;}
+  if(!formaPagamento){
+    alert('Selecione a forma de pagamento.');
+    if(document.getElementById('v-pagamento-box').style.display==='none') togglePagamentoBox();
+    return;
+  }
   const p=produtos.find(x=>x.id===prodId);
   if(p.qty<qty){alert('Estoque insuficiente! Disponível: '+p.qty+' un.');return;}
   const vendaUnitFinal = (vendaUnit!==''&&!isNaN(parseFloat(vendaUnit))) ? parseFloat(vendaUnit) : p.venda;
@@ -1501,8 +1507,9 @@ function renderPagamentos(){
         <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${fmt(total)}</td>
         <td>${m.forma_pagamento?`<span class="badge badge-ok">${m.forma_pagamento}</span>`:'<span style="color:var(--text-muted)">-</span>'}</td>
         <td style="color:var(--text-muted)">${m.obs||'-'}</td>
+        <td class="no-print" style="text-align:center"><button class="btn btn-sm btn-danger" onclick="excluirLancamento(${m.id})" title="Excluir">✕</button></td>
       </tr>`;
-    }).join(''):'<tr><td colspan="8" class="empty">Nenhum lançamento encontrado</td></tr>';
+    }).join(''):'<tr><td colspan="9" class="empty">Nenhum lançamento encontrado</td></tr>';
   }
   const totalQty=lista.reduce((s,m)=>s+(m.qty||0),0);
   const totalValor=lista.reduce((s,m)=>s+(m.qty||0)*(m.venda_unitario||0),0);
@@ -1549,8 +1556,9 @@ function renderComprasLista(){
         <td style="text-align:right;font-family:'DM Mono',monospace">${fmt(m.custo_unitario||0)}</td>
         <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${fmt(total)}</td>
         <td style="color:var(--text-muted)">${m.obs||'-'}</td>
+        <td class="no-print" style="text-align:center"><button class="btn btn-sm btn-danger" onclick="excluirLancamento(${m.id})" title="Excluir">✕</button></td>
       </tr>`;
-    }).join(''):'<tr><td colspan="7" class="empty">Nenhuma compra registrada</td></tr>';
+    }).join(''):'<tr><td colspan="8" class="empty">Nenhuma compra registrada</td></tr>';
   }
   const totalQty=lista.reduce((s,m)=>s+(m.qty||0),0);
   const totalValor=lista.reduce((s,m)=>s+(m.qty||0)*(m.custo_unitario||0),0);
@@ -1563,6 +1571,32 @@ function renderComprasLista(){
 function limparFiltrosCompras(){
   ['cp-mes','cp-ano','cp-dia','cp-produto','cp-fornecedor','cp-data-de','cp-data-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderComprasLista();
+}
+
+// ── EXCLUIR LANÇAMENTO (venda ou compra) — reverte o efeito no estoque ──
+async function excluirLancamento(movId){
+  const mov=movs.find(m=>m.id===movId);
+  if(!mov){ showToast('⚠️ Lançamento não encontrado.','warn'); return; }
+  const p=produtos.find(x=>x.id===mov.produto_id);
+  const tipoLabel = mov.tipo==='saida' ? 'venda' : 'compra';
+  const ajusteMsg = mov.tipo==='saida'
+    ? `O estoque será devolvido (+${mov.qty} un.).`
+    : `O estoque será reduzido (-${mov.qty} un.).`;
+  if(!confirm(`Excluir este lançamento de ${tipoLabel}? ${ajusteMsg} Esta ação não pode ser desfeita.`)) return;
+  try{
+    if(p){
+      let novaQty = mov.tipo==='saida' ? p.qty+mov.qty : p.qty-mov.qty;
+      let ajustadoZero=false;
+      if(novaQty<0){ novaQty=0; ajustadoZero=true; }
+      const [updatedProd]=await sb('produtos?id=eq.'+p.id,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({qty:novaQty})});
+      produtos[produtos.findIndex(x=>x.id===p.id)]=updatedProd;
+      if(ajustadoZero) showToast('⚠️ Estoque ajustado para 0 (não havia saldo suficiente para reverter totalmente).','warn');
+    }
+    await sb('movimentacoes?id=eq.'+movId,{method:'DELETE'});
+    movs=movs.filter(m=>m.id!==movId);
+    showToast('🗑 Lançamento de '+tipoLabel+' excluído.');
+    renderAll();
+  }catch(e){ console.error(e); showToast('⚠️ Erro ao excluir lançamento.','warn'); }
 }
 
 // ── FLUXO DE CAIXA (dia 01 a 31, filtro mês/ano) ──
