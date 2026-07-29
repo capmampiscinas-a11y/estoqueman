@@ -737,11 +737,26 @@
       <!-- COMPRAS (lista completa de lançamentos de compra) -->
       <div class="section" id="tab-compras-lista">
         <div class="section-head"><h1>🧾 Compras</h1><p>Histórico completo de todos os lançamentos de compra.</p></div>
-        <div class="top-bar">
-          <div class="search-wrap">
-            <input class="search-input" id="search-compras" placeholder="Buscar produto ou fornecedor..." oninput="renderComprasLista()">
+        <div class="card">
+          <div class="card-title">Filtros</div>
+          <div class="form-row cols-3">
+            <div class="form-group"><label>Mês</label><select id="cp-mes" class="sel-mes-filtro" onchange="renderComprasLista()"></select></div>
+            <div class="form-group"><label>Ano</label><select id="cp-ano" class="sel-ano-filtro" onchange="renderComprasLista()"></select></div>
+            <div class="form-group"><label>Dia</label><select id="cp-dia" class="sel-dia-filtro" onchange="renderComprasLista()"></select></div>
           </div>
-          <button class="btn btn-green" onclick="imprimirTabela('cp-print-wrap','Relatório de Compras')">🖨 Gerar PDF</button>
+          <div class="form-row cols-3">
+            <div class="form-group"><label>Produto</label><select id="cp-produto" class="sel-produto-filtro" onchange="renderComprasLista()"></select></div>
+            <div class="form-group"><label>Fornecedor</label><select id="cp-fornecedor" class="sel-fornecedor-filtro" onchange="renderComprasLista()"></select></div>
+            <div class="form-group"><label>De</label><input type="date" id="cp-data-de" onchange="renderComprasLista()"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Até</label><input type="date" id="cp-data-ate" onchange="renderComprasLista()"></div>
+            <div></div>
+          </div>
+          <div class="top-bar" style="margin-top:2px;margin-bottom:0;">
+            <button class="btn btn-ghost" onclick="limparFiltrosCompras()">✕ Limpar filtros</button>
+            <button class="btn btn-green" onclick="imprimirTabela('cp-print-wrap','Relatório de Compras')">🖨 Gerar PDF</button>
+          </div>
         </div>
         <div class="card">
           <div id="cp-print-wrap">
@@ -836,14 +851,15 @@
     </div>
     <div class="form-row">
       <div class="form-group"><label>Produto</label>
-        <select id="c-prod"><option value="">Selecione...</option></select>
+        <select id="c-prod" onchange="onProdutoCompraSelecionado()"><option value="">Selecione...</option></select>
       </div>
-      <div class="form-group"><label>Quantidade comprada</label><input id="c-qty" type="number" min="1" placeholder="0"></div>
+      <div class="form-group"><label>Quantidade comprada</label><input id="c-qty" type="number" min="1" placeholder="0" oninput="atualizarTotalCompra()"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Data da compra</label><input id="c-data" type="date"></div>
-      <div class="form-group"><label>Custo unitário (R$) <span class="hint">opcional, atualiza o produto</span></label><input id="c-custo" type="number" step="0.01" placeholder="0,00"></div>
+      <div class="form-group"><label>Custo unitário (R$) <span class="hint">preenchido do cadastro, editável</span></label><input id="c-custo" type="number" step="0.01" placeholder="0,00" oninput="atualizarTotalCompra()"></div>
     </div>
+    <div class="info-box green" id="c-total-box" style="display:none;"></div>
     <div class="form-row">
       <div class="form-group"><label>Fornecedor <span class="hint">opcional, atualiza o produto</span></label>
         <select id="c-forn"><option value="">— Nenhum —</option></select>
@@ -866,15 +882,16 @@
     </div>
     <div class="form-row">
       <div class="form-group"><label>Produto</label>
-        <select id="v-prod" onchange="atualizarEstoqueDisponivel()"><option value="">Selecione...</option></select>
+        <select id="v-prod" onchange="onProdutoVendaSelecionado()"><option value="">Selecione...</option></select>
       </div>
-      <div class="form-group"><label>Quantidade vendida</label><input id="v-qty" type="number" min="1" placeholder="0"></div>
+      <div class="form-group"><label>Quantidade vendida</label><input id="v-qty" type="number" min="1" placeholder="0" oninput="atualizarTotalVenda()"></div>
     </div>
     <div class="info-box" id="v-disponivel" style="display:none;"></div>
     <div class="form-row">
       <div class="form-group"><label>Data da venda</label><input id="v-data" type="date"></div>
-      <div class="form-group"><label>Preço de venda unit. (R$) <span class="hint">opcional, atualiza o produto</span></label><input id="v-venda" type="number" step="0.01" placeholder="0,00"></div>
+      <div class="form-group"><label>Preço de venda unit. (R$) <span class="hint">preenchido do cadastro, editável</span></label><input id="v-venda" type="number" step="0.01" placeholder="0,00" oninput="atualizarTotalVenda()"></div>
     </div>
+    <div class="info-box green" id="v-total-box" style="display:none;"></div>
     <div class="form-row">
       <div class="form-group"><label>Cliente <span class="hint">opcional</span></label><input id="v-cliente" placeholder="Nome do cliente"></div>
       <div class="form-group">
@@ -953,7 +970,7 @@ function setConnStatus(ok){
   lbl.textContent = ok ? 'Supabase' : 'Offline';
 }
 
-let produtos=[], movs=[], fornecedores=[];
+let produtos=[], movs=[], fornecedores=[], formasPagamento=[];
 
 async function carregarDados(){
   try {
@@ -968,6 +985,17 @@ async function carregarDados(){
     setConnStatus(false);
     showToast('⚠️ Não foi possível conectar ao Supabase. Verifique se rodou o script SQL de setup.','warn');
     produtos=[]; fornecedores=[]; movs=[];
+  }
+  await carregarFormasPagamento();
+}
+
+async function carregarFormasPagamento(){
+  try{
+    const fp = await sb('formas_pagamento?select=*&order=nome.asc');
+    formasPagamento = fp||[];
+  }catch(e){
+    console.warn('Tabela formas_pagamento não encontrada no Supabase — usando apenas a lista padrão local.', e);
+    formasPagamento = [];
   }
 }
 
@@ -1155,7 +1183,37 @@ function openCompraModal(){
   document.getElementById('c-obs').value='';
   document.getElementById('c-data').value=new Date().toISOString().slice(0,10);
   atualizarSelects();
+  onProdutoCompraSelecionado();
   openModal('modal-compra');
+}
+
+function onProdutoCompraSelecionado(){
+  const sel=document.getElementById('c-prod');
+  const prodId=parseInt(sel.value);
+  const custoInput=document.getElementById('c-custo');
+  if(prodId){
+    const p=produtos.find(x=>x.id===prodId);
+    custoInput.value = p&&p.custo ? Number(p.custo).toFixed(2) : '';
+  } else {
+    custoInput.value='';
+  }
+  atualizarTotalCompra();
+}
+
+function atualizarTotalCompra(){
+  const prodId=parseInt(document.getElementById('c-prod').value);
+  const qty=parseFloat(document.getElementById('c-qty').value)||0;
+  const custoRaw=document.getElementById('c-custo').value;
+  let custo=parseFloat(custoRaw);
+  if(isNaN(custo)){
+    const p=produtos.find(x=>x.id===prodId);
+    custo=p?(p.custo||0):0;
+  }
+  const box=document.getElementById('c-total-box');
+  if(!box)return;
+  if(!prodId){ box.style.display='none'; return; }
+  box.style.display='flex';
+  box.innerHTML=`💰 Valor total da compra: <b>${fmt(qty*custo)}</b> <span style="color:var(--text-muted);font-weight:400;margin-left:6px;">(${qty} un. × ${fmt(custo)})</span>`;
 }
 
 async function registrarCompra(){
@@ -1185,7 +1243,11 @@ async function registrarCompra(){
 }
 
 // ── VENDA (saída, modal) ──
-const FORMAS_PAGAMENTO=['Dinheiro','Pix','Cartão de Débito','Cartão de Crédito','Boleto','Transferência'];
+const FORMAS_PAGAMENTO_PADRAO=['Dinheiro','Pix','Cartão de Débito','Cartão de Crédito','Boleto','Transferência'];
+function getListaFormasPagamento(){
+  const dinamicas=formasPagamento.map(f=>f.nome);
+  return [...new Set([...FORMAS_PAGAMENTO_PADRAO, ...dinamicas])];
+}
 
 function openVendaModal(){
   document.getElementById('v-qty').value='';document.getElementById('v-venda').value='';
@@ -1195,19 +1257,74 @@ function openVendaModal(){
   document.getElementById('v-pagamento-btn').innerHTML='💳 Selecionar forma de pagamento';
   document.getElementById('v-pagamento-box').style.display='none';
   atualizarSelects();
-  atualizarEstoqueDisponivel();
+  onProdutoVendaSelecionado();
   openModal('modal-venda');
+}
+
+function onProdutoVendaSelecionado(){
+  atualizarEstoqueDisponivel();
+  const sel=document.getElementById('v-prod');
+  const prodId=parseInt(sel.value);
+  const precoInput=document.getElementById('v-venda');
+  if(prodId){
+    const p=produtos.find(x=>x.id===prodId);
+    precoInput.value = p&&p.venda ? Number(p.venda).toFixed(2) : '';
+  } else {
+    precoInput.value='';
+  }
+  atualizarTotalVenda();
+}
+
+function atualizarTotalVenda(){
+  const prodId=parseInt(document.getElementById('v-prod').value);
+  const qty=parseFloat(document.getElementById('v-qty').value)||0;
+  const precoRaw=document.getElementById('v-venda').value;
+  let preco=parseFloat(precoRaw);
+  if(isNaN(preco)){
+    const p=produtos.find(x=>x.id===prodId);
+    preco=p?(p.venda||0):0;
+  }
+  const box=document.getElementById('v-total-box');
+  if(!box)return;
+  if(!prodId){ box.style.display='none'; return; }
+  box.style.display='flex';
+  box.innerHTML=`💰 Valor total da venda: <b>${fmt(qty*preco)}</b> <span style="color:var(--text-muted);font-weight:400;margin-left:6px;">(${qty} un. × ${fmt(preco)})</span>`;
 }
 
 function togglePagamentoBox(){
   const box=document.getElementById('v-pagamento-box');
-  const opcoes=document.getElementById('v-pagamento-opcoes');
   const atual=document.getElementById('v-pagamento').value;
   const abrindo=box.style.display==='none';
-  if(abrindo){
-    opcoes.innerHTML=FORMAS_PAGAMENTO.map(f=>`<button type="button" class="filtro-btn${atual===f?' active':''}" onclick="selecionarPagamento('${f}')">${f}</button>`).join('');
-  }
+  if(abrindo) renderChipsPagamento(atual);
   box.style.display=abrindo?'block':'none';
+}
+
+function renderChipsPagamento(atual){
+  const opcoes=document.getElementById('v-pagamento-opcoes');
+  const lista=getListaFormasPagamento();
+  opcoes.innerHTML = lista.map(f=>`<button type="button" class="filtro-btn${atual===f?' active':''}" onclick="selecionarPagamento('${f.replace(/'/g,"\\'")}')">${f}</button>`).join('')
+    + `<button type="button" class="filtro-btn" style="border-style:dashed;" onclick="cadastrarNovaFormaPagamento()">+ Nova forma</button>`;
+}
+
+async function cadastrarNovaFormaPagamento(){
+  const nomeBruto=prompt('Nome da nova forma de pagamento:');
+  if(!nomeBruto||!nomeBruto.trim()) return;
+  const nome=nomeBruto.trim().replace(/["']/g,'');
+  if(getListaFormasPagamento().some(f=>f.toLowerCase()===nome.toLowerCase())){
+    showToast('⚠️ Essa forma de pagamento já existe.','warn');
+    selecionarPagamento(nome);
+    return;
+  }
+  try{
+    const [created]=await sb('formas_pagamento',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify({nome})});
+    formasPagamento.push(created);
+    showToast('✅ Forma de pagamento cadastrada!');
+  }catch(e){
+    console.warn('Não foi possível salvar no Supabase (crie a tabela formas_pagamento). Válido só nesta sessão.', e);
+    formasPagamento.push({id:null, nome});
+    showToast('⚠️ Salva apenas nesta sessão — crie a tabela formas_pagamento no Supabase para persistir.','warn');
+  }
+  selecionarPagamento(nome);
 }
 
 function selecionarPagamento(forma){
@@ -1293,6 +1410,7 @@ function renderCritico(){
 function irParaCompra(id){
   openCompraModal();
   const sel=document.getElementById('c-prod');if(sel)sel.value=id;
+  onProdutoCompraSelecionado();
   document.getElementById('c-qty').focus();
 }
 
@@ -1343,6 +1461,11 @@ function popularFiltrosPeriodo(){
   document.querySelectorAll('.sel-produto-filtro').forEach(sel=>{
     const cur=sel.value;
     sel.innerHTML='<option value="">Todos</option>'+produtos.map(p=>`<option value="${p.id}">${p.nome} (${p.cod})</option>`).join('');
+    sel.value=cur;
+  });
+  document.querySelectorAll('.sel-fornecedor-filtro').forEach(sel=>{
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Todos</option>'+fornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
     sel.value=cur;
   });
 }
@@ -1396,15 +1519,22 @@ function limparFiltrosPagamentos(){
 
 // ── COMPRAS (todos os lançamentos de compra) ──
 function renderComprasLista(){
-  const q=(document.getElementById('search-compras')?.value||'').toLowerCase();
+  popularFiltrosPeriodo();
+  const mes=document.getElementById('cp-mes')?.value||'';
+  const ano=document.getElementById('cp-ano')?.value||'';
+  const dia=document.getElementById('cp-dia')?.value||'';
+  const prod=document.getElementById('cp-produto')?.value||'';
+  const forn=document.getElementById('cp-fornecedor')?.value||'';
+  const de=document.getElementById('cp-data-de')?.value||'';
+  const ate=document.getElementById('cp-data-ate')?.value||'';
   let lista=movs.filter(m=>m.tipo==='entrada');
-  if(q){
-    lista=lista.filter(m=>{
-      const p=produtos.find(x=>x.id===m.produto_id);
-      const f=fornecedores.find(x=>x.id===m.fornecedor_id);
-      return (p&&p.nome.toLowerCase().includes(q))||(f&&f.nome.toLowerCase().includes(q));
-    });
-  }
+  if(mes) lista=lista.filter(m=>String(m.data||'').slice(5,7)===mes);
+  if(ano) lista=lista.filter(m=>String(m.data||'').slice(0,4)===ano);
+  if(dia) lista=lista.filter(m=>String(m.data||'').slice(8,10)===dia);
+  if(prod) lista=lista.filter(m=>String(m.produto_id)===String(prod));
+  if(forn) lista=lista.filter(m=>String(m.fornecedor_id)===String(forn));
+  if(de) lista=lista.filter(m=>String(m.data||'')>=de);
+  if(ate) lista=lista.filter(m=>String(m.data||'')<=ate);
   lista=[...lista].sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
   const tbody=document.getElementById('cp-tbody');
   if(tbody){
@@ -1429,6 +1559,10 @@ function renderComprasLista(){
     <div class="saldo-summary-item">Lançamentos<b>${lista.length}</b></div>
     <div class="saldo-summary-item">Unidades compradas<b>${totalQty}</b></div>
     <div class="saldo-summary-item">Total em compras<b>${fmt(totalValor)}</b></div>`;
+}
+function limparFiltrosCompras(){
+  ['cp-mes','cp-ano','cp-dia','cp-produto','cp-fornecedor','cp-data-de','cp-data-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderComprasLista();
 }
 
 // ── FLUXO DE CAIXA (dia 01 a 31, filtro mês/ano) ──
