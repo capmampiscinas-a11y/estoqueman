@@ -363,6 +363,29 @@
   .modal-close:hover { background:var(--red-bg); color:var(--red); border-color:#F5BFBC; }
   .modal-actions { display:flex; gap:8px; margin-top:6px; }
 
+  /* PAGAMENTO (chips) */
+  .pay-btn-select { width:100%; text-align:left; display:flex; align-items:center; gap:6px; }
+  .pay-box { border:1.5px dashed var(--gray-mid); border-radius:var(--radius-sm); padding:10px; margin-top:8px; }
+
+  /* PDF / IMPRESSÃO */
+  #print-area { display:none; }
+  @media print {
+    body * { visibility:hidden; }
+    #print-area, #print-area * { visibility:visible; }
+    #print-area {
+      display:block; position:absolute; top:0; left:0; width:100%; padding:16px;
+    }
+    .print-header { margin-bottom:14px; text-align:center; }
+    .print-header h1 { font-size:16px; letter-spacing:-0.2px; }
+    .print-header h2 { font-size:13px; font-weight:600; margin-top:2px; }
+    .print-header p { font-size:10px; color:#555; margin-top:4px; }
+    #print-area table { width:100%; border-collapse:collapse; font-size:10px; table-layout:auto; }
+    #print-area th, #print-area td { border:1px solid #ccc; padding:4px 6px; }
+    #print-area .saldo-summary { display:flex; gap:18px; margin-bottom:12px; font-size:11px; }
+    #print-area .saldo-summary-item b { display:block; font-size:13px; }
+    #print-area .badge { border:1px solid #999; padding:1px 6px; border-radius:99px; }
+  }
+
   @media (max-width:900px) {
     :root { --sidebar-w: 210px; }
   }
@@ -483,6 +506,17 @@
     <div class="nav-group-label">Análise</div>
     <button class="nav-item" data-tab="relatorios" onclick="switchTab('relatorios')">
       <span class="nav-icon">📈</span><span class="nav-label">Relatórios</span>
+    </button>
+
+    <div class="nav-group-label">Financeiro</div>
+    <button class="nav-item" data-tab="pagamentos" onclick="switchTab('pagamentos')">
+      <span class="nav-icon">💳</span><span class="nav-label">Pagamentos</span>
+    </button>
+    <button class="nav-item" data-tab="compras-lista" onclick="switchTab('compras-lista')">
+      <span class="nav-icon">🧾</span><span class="nav-label">Compras</span>
+    </button>
+    <button class="nav-item" data-tab="fluxocaixa" onclick="switchTab('fluxocaixa')">
+      <span class="nav-icon">📅</span><span class="nav-label">Fluxo de caixa</span>
     </button>
   </aside>
 
@@ -663,9 +697,103 @@
         </div>
       </div>
 
+      <!-- PAGAMENTOS (lançamentos de vendas/pagamentos) -->
+      <div class="section" id="tab-pagamentos">
+        <div class="section-head"><h1>💳 Pagamentos</h1><p>Todos os lançamentos de vendas, com filtros por período, produto e forma de pagamento.</p></div>
+        <div class="card">
+          <div class="card-title">Filtros</div>
+          <div class="form-row cols-3">
+            <div class="form-group"><label>Mês</label><select id="pg-mes" class="sel-mes-filtro" onchange="renderPagamentos()"></select></div>
+            <div class="form-group"><label>Ano</label><select id="pg-ano" class="sel-ano-filtro" onchange="renderPagamentos()"></select></div>
+            <div class="form-group"><label>Dia</label><select id="pg-dia" class="sel-dia-filtro" onchange="renderPagamentos()"></select></div>
+          </div>
+          <div class="form-row cols-3">
+            <div class="form-group"><label>Produto</label><select id="pg-produto" class="sel-produto-filtro" onchange="renderPagamentos()"></select></div>
+            <div class="form-group"><label>De</label><input type="date" id="pg-data-de" onchange="renderPagamentos()"></div>
+            <div class="form-group"><label>Até</label><input type="date" id="pg-data-ate" onchange="renderPagamentos()"></div>
+          </div>
+          <div class="top-bar" style="margin-top:2px;margin-bottom:0;">
+            <button class="btn btn-ghost" onclick="limparFiltrosPagamentos()">✕ Limpar filtros</button>
+            <button class="btn btn-green" onclick="imprimirTabela('pg-print-wrap','Relatório de Pagamentos')">🖨 Gerar PDF</button>
+          </div>
+        </div>
+        <div class="card">
+          <div id="pg-print-wrap">
+            <div class="saldo-summary" id="pg-summary"></div>
+            <div style="overflow-x:auto;">
+              <table style="table-layout:auto;">
+                <thead><tr>
+                  <th>Data</th><th>Produto</th><th>Cliente</th><th style="text-align:right">Qtd</th>
+                  <th style="text-align:right">Preço unit.</th><th style="text-align:right">Total</th>
+                  <th>Pagamento</th><th>Observação</th>
+                </tr></thead>
+                <tbody id="pg-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPRAS (lista completa de lançamentos de compra) -->
+      <div class="section" id="tab-compras-lista">
+        <div class="section-head"><h1>🧾 Compras</h1><p>Histórico completo de todos os lançamentos de compra.</p></div>
+        <div class="top-bar">
+          <div class="search-wrap">
+            <input class="search-input" id="search-compras" placeholder="Buscar produto ou fornecedor..." oninput="renderComprasLista()">
+          </div>
+          <button class="btn btn-green" onclick="imprimirTabela('cp-print-wrap','Relatório de Compras')">🖨 Gerar PDF</button>
+        </div>
+        <div class="card">
+          <div id="cp-print-wrap">
+            <div class="saldo-summary" id="cp-summary"></div>
+            <div style="overflow-x:auto;">
+              <table style="table-layout:auto;">
+                <thead><tr>
+                  <th>Data</th><th>Produto</th><th>Fornecedor</th><th style="text-align:right">Qtd</th>
+                  <th style="text-align:right">Custo unit.</th><th style="text-align:right">Total</th><th>Observação</th>
+                </tr></thead>
+                <tbody id="cp-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FLUXO DE CAIXA -->
+      <div class="section" id="tab-fluxocaixa">
+        <div class="section-head"><h1>📅 Fluxo de caixa</h1><p>Movimentação financeira diária (dia 01 a 31) do mês e ano selecionados.</p></div>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group"><label>Mês</label><select id="fx-mes" class="sel-mes-obrig" onchange="renderFluxoCaixa()"></select></div>
+            <div class="form-group"><label>Ano</label><select id="fx-ano" class="sel-ano-obrig" onchange="renderFluxoCaixa()"></select></div>
+          </div>
+          <div class="top-bar" style="margin-top:2px;margin-bottom:0;justify-content:flex-end;">
+            <button class="btn btn-green" onclick="imprimirTabela('fx-print-wrap','Fluxo de Caixa')">🖨 Gerar PDF</button>
+          </div>
+        </div>
+        <div class="card">
+          <div id="fx-print-wrap">
+            <div class="saldo-summary" id="fx-summary"></div>
+            <div style="overflow-x:auto;">
+              <table style="table-layout:auto;">
+                <thead><tr>
+                  <th style="width:60px">Dia</th><th style="text-align:right">Recebimentos (vendas)</th>
+                  <th style="text-align:right">Pagamentos (compras)</th><th style="text-align:right">Saldo do dia</th>
+                  <th style="text-align:right">Saldo acumulado</th>
+                </tr></thead>
+                <tbody id="fx-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
+
+<!-- ÁREA DE IMPRESSÃO (usada apenas ao gerar PDF) -->
+<div id="print-area"></div>
 
 <!-- MODAL: CADASTRO / EDIÇÃO DE PRODUTO -->
 <div class="modal-overlay" id="modal-cadastro" onclick="if(event.target===this)closeModal('modal-cadastro')">
@@ -713,13 +841,14 @@
       <div class="form-group"><label>Quantidade comprada</label><input id="c-qty" type="number" min="1" placeholder="0"></div>
     </div>
     <div class="form-row">
+      <div class="form-group"><label>Data da compra</label><input id="c-data" type="date"></div>
       <div class="form-group"><label>Custo unitário (R$) <span class="hint">opcional, atualiza o produto</span></label><input id="c-custo" type="number" step="0.01" placeholder="0,00"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>Fornecedor <span class="hint">opcional, atualiza o produto</span></label>
         <select id="c-forn"><option value="">— Nenhum —</option></select>
       </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group" style="grid-column:1/-1;"><label>Observação</label><input id="c-obs" placeholder="Nº da nota, pedido, etc."></div>
+      <div class="form-group"><label>Observação</label><input id="c-obs" placeholder="Nº da nota, pedido, etc."></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-green" onclick="registrarCompra()">✅ Registrar compra</button>
@@ -743,8 +872,19 @@
     </div>
     <div class="info-box" id="v-disponivel" style="display:none;"></div>
     <div class="form-row">
+      <div class="form-group"><label>Data da venda</label><input id="v-data" type="date"></div>
       <div class="form-group"><label>Preço de venda unit. (R$) <span class="hint">opcional, atualiza o produto</span></label><input id="v-venda" type="number" step="0.01" placeholder="0,00"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>Cliente <span class="hint">opcional</span></label><input id="v-cliente" placeholder="Nome do cliente"></div>
+      <div class="form-group">
+        <label>Forma de pagamento <span class="hint">opcional</span></label>
+        <button type="button" class="btn pay-btn-select" id="v-pagamento-btn" onclick="togglePagamentoBox()">💳 Selecionar forma de pagamento</button>
+        <input type="hidden" id="v-pagamento" value="">
+      </div>
+    </div>
+    <div class="pay-box" id="v-pagamento-box" style="display:none;">
+      <div class="filtro-bar" id="v-pagamento-opcoes" style="margin-bottom:0;"></div>
     </div>
     <div class="form-row">
       <div class="form-group" style="grid-column:1/-1;"><label>Observação</label><input id="v-obs" placeholder="Opcional"></div>
@@ -1013,6 +1153,7 @@ function renderSaldo(){
 function openCompraModal(){
   document.getElementById('c-qty').value='';document.getElementById('c-custo').value='';
   document.getElementById('c-obs').value='';
+  document.getElementById('c-data').value=new Date().toISOString().slice(0,10);
   atualizarSelects();
   openModal('modal-compra');
 }
@@ -1023,6 +1164,7 @@ async function registrarCompra(){
   const custo=document.getElementById('c-custo').value;
   const fornId=document.getElementById('c-forn').value?parseInt(document.getElementById('c-forn').value):null;
   const obs=document.getElementById('c-obs').value.trim();
+  const dataCompra=document.getElementById('c-data').value||new Date().toISOString().slice(0,10);
   if(!prodId){alert('Selecione um produto.');return;}
   if(qty<=0){alert('Informe uma quantidade válida.');return;}
   const p=produtos.find(x=>x.id===prodId);
@@ -1033,7 +1175,7 @@ async function registrarCompra(){
   try{
     const [updatedProd]=await sb('produtos?id=eq.'+prodId,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(patch)});
     produtos[produtos.findIndex(x=>x.id===prodId)]=updatedProd;
-    const movObj={produto_id:prodId,fornecedor_id:fornId,tipo:'entrada',qty,custo_unitario:custoUnit,obs,data:new Date().toISOString().slice(0,10)};
+    const movObj={produto_id:prodId,fornecedor_id:fornId,tipo:'entrada',qty,custo_unitario:custoUnit,obs,data:dataCompra};
     const [createdMov]=await sb('movimentacoes',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify(movObj)});
     movs.unshift(createdMov);
     showToast(`✅ Compra registrada: +${qty} un. de ${updatedProd.nome}`);
@@ -1043,12 +1185,35 @@ async function registrarCompra(){
 }
 
 // ── VENDA (saída, modal) ──
+const FORMAS_PAGAMENTO=['Dinheiro','Pix','Cartão de Débito','Cartão de Crédito','Boleto','Transferência'];
+
 function openVendaModal(){
   document.getElementById('v-qty').value='';document.getElementById('v-venda').value='';
   document.getElementById('v-cliente').value='';document.getElementById('v-obs').value='';
+  document.getElementById('v-data').value=new Date().toISOString().slice(0,10);
+  document.getElementById('v-pagamento').value='';
+  document.getElementById('v-pagamento-btn').innerHTML='💳 Selecionar forma de pagamento';
+  document.getElementById('v-pagamento-box').style.display='none';
   atualizarSelects();
   atualizarEstoqueDisponivel();
   openModal('modal-venda');
+}
+
+function togglePagamentoBox(){
+  const box=document.getElementById('v-pagamento-box');
+  const opcoes=document.getElementById('v-pagamento-opcoes');
+  const atual=document.getElementById('v-pagamento').value;
+  const abrindo=box.style.display==='none';
+  if(abrindo){
+    opcoes.innerHTML=FORMAS_PAGAMENTO.map(f=>`<button type="button" class="filtro-btn${atual===f?' active':''}" onclick="selecionarPagamento('${f}')">${f}</button>`).join('');
+  }
+  box.style.display=abrindo?'block':'none';
+}
+
+function selecionarPagamento(forma){
+  document.getElementById('v-pagamento').value=forma;
+  document.getElementById('v-pagamento-btn').innerHTML='💳 '+forma;
+  document.getElementById('v-pagamento-box').style.display='none';
 }
 
 function atualizarEstoqueDisponivel(){
@@ -1069,6 +1234,8 @@ async function registrarVenda(){
   const vendaUnit=document.getElementById('v-venda').value;
   const cliente=document.getElementById('v-cliente').value.trim();
   const obs=document.getElementById('v-obs').value.trim();
+  const dataVenda=document.getElementById('v-data').value||new Date().toISOString().slice(0,10);
+  const formaPagamento=document.getElementById('v-pagamento').value||null;
   if(!prodId){alert('Selecione um produto.');return;}
   if(qty<=0){alert('Informe uma quantidade válida.');return;}
   const p=produtos.find(x=>x.id===prodId);
@@ -1079,7 +1246,7 @@ async function registrarVenda(){
   try{
     const [updatedProd]=await sb('produtos?id=eq.'+prodId,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(patch)});
     produtos[produtos.findIndex(x=>x.id===prodId)]=updatedProd;
-    const movObj={produto_id:prodId,tipo:'saida',qty,venda_unitario:vendaUnitFinal,cliente:cliente||null,obs,data:new Date().toISOString().slice(0,10)};
+    const movObj={produto_id:prodId,tipo:'saida',qty,venda_unitario:vendaUnitFinal,cliente:cliente||null,obs,data:dataVenda,forma_pagamento:formaPagamento};
     const [createdMov]=await sb('movimentacoes',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify(movObj)});
     movs.unshift(createdMov);
     showToast(`📤 Venda registrada: -${qty} un. de ${updatedProd.nome}`);
@@ -1129,10 +1296,195 @@ function irParaCompra(id){
   document.getElementById('c-qty').focus();
 }
 
+// ── UTIL: DATAS ──
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function formatarData(d){
+  if(!d) return '-';
+  const [y,m,day]=String(d).slice(0,10).split('-');
+  return (y&&m&&day) ? `${day}/${m}/${y}` : d;
+}
+function anosDisponiveis(){
+  const anos=new Set(movs.map(m=>parseInt(String(m.data||'').slice(0,4))).filter(a=>!isNaN(a)));
+  anos.add(new Date().getFullYear());
+  return [...anos].sort((a,b)=>b-a);
+}
+function diaExisteNoMes(ano,mes,dia){
+  if(!ano||!mes) return true;
+  return dia<=new Date(ano,mes,0).getDate();
+}
+function popularFiltrosPeriodo(){
+  const anos=anosDisponiveis();
+  document.querySelectorAll('.sel-mes-filtro').forEach(sel=>{
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Todos</option>'+MESES.map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
+    sel.value=cur;
+  });
+  document.querySelectorAll('.sel-mes-obrig').forEach(sel=>{
+    if(sel.options.length) return; // já populado, mantém seleção do usuário
+    sel.innerHTML=MESES.map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
+    sel.value=String(new Date().getMonth()+1).padStart(2,'0');
+  });
+  document.querySelectorAll('.sel-ano-filtro').forEach(sel=>{
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Todos</option>'+anos.map(a=>`<option value="${a}">${a}</option>`).join('');
+    sel.value=cur;
+  });
+  document.querySelectorAll('.sel-ano-obrig').forEach(sel=>{
+    const cur=sel.value;
+    sel.innerHTML=anos.map(a=>`<option value="${a}">${a}</option>`).join('');
+    sel.value=cur||String(new Date().getFullYear());
+  });
+  document.querySelectorAll('.sel-dia-filtro').forEach(sel=>{
+    if(sel.options.length) return;
+    let opts='<option value="">Todos</option>';
+    for(let d=1;d<=31;d++) opts+=`<option value="${String(d).padStart(2,'0')}">${String(d).padStart(2,'0')}</option>`;
+    sel.innerHTML=opts;
+  });
+  document.querySelectorAll('.sel-produto-filtro').forEach(sel=>{
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Todos</option>'+produtos.map(p=>`<option value="${p.id}">${p.nome} (${p.cod})</option>`).join('');
+    sel.value=cur;
+  });
+}
+
+// ── PAGAMENTOS (todos os lançamentos de venda) ──
+function renderPagamentos(){
+  popularFiltrosPeriodo();
+  const mes=document.getElementById('pg-mes')?.value||'';
+  const ano=document.getElementById('pg-ano')?.value||'';
+  const dia=document.getElementById('pg-dia')?.value||'';
+  const prod=document.getElementById('pg-produto')?.value||'';
+  const de=document.getElementById('pg-data-de')?.value||'';
+  const ate=document.getElementById('pg-data-ate')?.value||'';
+  let lista=movs.filter(m=>m.tipo==='saida');
+  if(mes) lista=lista.filter(m=>String(m.data||'').slice(5,7)===mes);
+  if(ano) lista=lista.filter(m=>String(m.data||'').slice(0,4)===ano);
+  if(dia) lista=lista.filter(m=>String(m.data||'').slice(8,10)===dia);
+  if(prod) lista=lista.filter(m=>String(m.produto_id)===String(prod));
+  if(de) lista=lista.filter(m=>String(m.data||'')>=de);
+  if(ate) lista=lista.filter(m=>String(m.data||'')<=ate);
+  lista=[...lista].sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  const tbody=document.getElementById('pg-tbody');
+  if(tbody){
+    tbody.innerHTML=lista.length?lista.map(m=>{
+      const p=produtos.find(x=>x.id===m.produto_id);
+      const total=(m.qty||0)*(m.venda_unitario||0);
+      return `<tr>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">${formatarData(m.data)}</td>
+        <td style="font-weight:500">${p?p.nome:'(removido)'}</td>
+        <td style="color:var(--text-muted)">${m.cliente||'-'}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace">${m.qty}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace">${fmt(m.venda_unitario||0)}</td>
+        <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${fmt(total)}</td>
+        <td>${m.forma_pagamento?`<span class="badge badge-ok">${m.forma_pagamento}</span>`:'<span style="color:var(--text-muted)">-</span>'}</td>
+        <td style="color:var(--text-muted)">${m.obs||'-'}</td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="8" class="empty">Nenhum lançamento encontrado</td></tr>';
+  }
+  const totalQty=lista.reduce((s,m)=>s+(m.qty||0),0);
+  const totalValor=lista.reduce((s,m)=>s+(m.qty||0)*(m.venda_unitario||0),0);
+  const sumEl=document.getElementById('pg-summary');
+  if(sumEl) sumEl.innerHTML=`
+    <div class="saldo-summary-item">Lançamentos<b>${lista.length}</b></div>
+    <div class="saldo-summary-item">Unidades vendidas<b>${totalQty}</b></div>
+    <div class="saldo-summary-item">Total em vendas<b>${fmt(totalValor)}</b></div>`;
+}
+function limparFiltrosPagamentos(){
+  ['pg-mes','pg-ano','pg-dia','pg-produto','pg-data-de','pg-data-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderPagamentos();
+}
+
+// ── COMPRAS (todos os lançamentos de compra) ──
+function renderComprasLista(){
+  const q=(document.getElementById('search-compras')?.value||'').toLowerCase();
+  let lista=movs.filter(m=>m.tipo==='entrada');
+  if(q){
+    lista=lista.filter(m=>{
+      const p=produtos.find(x=>x.id===m.produto_id);
+      const f=fornecedores.find(x=>x.id===m.fornecedor_id);
+      return (p&&p.nome.toLowerCase().includes(q))||(f&&f.nome.toLowerCase().includes(q));
+    });
+  }
+  lista=[...lista].sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  const tbody=document.getElementById('cp-tbody');
+  if(tbody){
+    tbody.innerHTML=lista.length?lista.map(m=>{
+      const p=produtos.find(x=>x.id===m.produto_id);
+      const total=(m.qty||0)*(m.custo_unitario||0);
+      return `<tr>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">${formatarData(m.data)}</td>
+        <td style="font-weight:500">${p?p.nome:'(removido)'}</td>
+        <td style="color:var(--text-muted)">${fornNome(m.fornecedor_id)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace">${m.qty}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace">${fmt(m.custo_unitario||0)}</td>
+        <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${fmt(total)}</td>
+        <td style="color:var(--text-muted)">${m.obs||'-'}</td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="7" class="empty">Nenhuma compra registrada</td></tr>';
+  }
+  const totalQty=lista.reduce((s,m)=>s+(m.qty||0),0);
+  const totalValor=lista.reduce((s,m)=>s+(m.qty||0)*(m.custo_unitario||0),0);
+  const sumEl=document.getElementById('cp-summary');
+  if(sumEl) sumEl.innerHTML=`
+    <div class="saldo-summary-item">Lançamentos<b>${lista.length}</b></div>
+    <div class="saldo-summary-item">Unidades compradas<b>${totalQty}</b></div>
+    <div class="saldo-summary-item">Total em compras<b>${fmt(totalValor)}</b></div>`;
+}
+
+// ── FLUXO DE CAIXA (dia 01 a 31, filtro mês/ano) ──
+function renderFluxoCaixa(){
+  popularFiltrosPeriodo();
+  const mesSel=document.getElementById('fx-mes'), anoSel=document.getElementById('fx-ano');
+  if(!mesSel||!anoSel) return;
+  const mes=mesSel.value, ano=anoSel.value;
+  const prefixo=ano+'-'+mes+'-';
+  let acumulado=0, totalRec=0, totalPag=0, linhas='';
+  for(let d=1; d<=31; d++){
+    const dd=String(d).padStart(2,'0');
+    const dataStr=prefixo+dd;
+    const valido=diaExisteNoMes(parseInt(ano),parseInt(mes),d);
+    const receb=movs.filter(m=>m.tipo==='saida'&&m.data===dataStr).reduce((s,m)=>s+(m.qty||0)*(m.venda_unitario||0),0);
+    const pag=movs.filter(m=>m.tipo==='entrada'&&m.data===dataStr).reduce((s,m)=>s+(m.qty||0)*(m.custo_unitario||0),0);
+    const saldoDia=receb-pag;
+    if(valido){ acumulado+=saldoDia; totalRec+=receb; totalPag+=pag; }
+    linhas+=`<tr${valido?'':' style="opacity:0.4"'}>
+      <td style="font-family:'DM Mono',monospace;font-weight:600">${dd}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--green)">${valido?fmt(receb):'—'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--red)">${valido?fmt(pag):'—'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:${saldoDia<0?'var(--red)':'var(--green)'}">${valido?fmt(saldoDia):'—'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700">${valido?fmt(acumulado):'—'}</td>
+    </tr>`;
+  }
+  const tbody=document.getElementById('fx-tbody');
+  if(tbody) tbody.innerHTML=linhas;
+  const sumEl=document.getElementById('fx-summary');
+  if(sumEl) sumEl.innerHTML=`
+    <div class="saldo-summary-item">Total recebido no mês<b style="color:var(--green)">${fmt(totalRec)}</b></div>
+    <div class="saldo-summary-item">Total pago no mês<b style="color:var(--red)">${fmt(totalPag)}</b></div>
+    <div class="saldo-summary-item">Saldo do mês<b style="color:${(totalRec-totalPag)<0?'var(--red)':'var(--green)'}">${fmt(totalRec-totalPag)}</b></div>`;
+}
+
+// ── IMPRESSÃO / PDF (usa o diálogo de impressão do navegador — "Salvar como PDF") ──
+function imprimirTabela(containerId, titulo){
+  const container=document.getElementById(containerId);
+  if(!container){ showToast('⚠️ Nada para imprimir.','warn'); return; }
+  const printArea=document.getElementById('print-area');
+  const agora=new Date().toLocaleString('pt-BR');
+  printArea.innerHTML=`
+    <div class="print-header">
+      <h1>C@P Consultoria</h1>
+      <h2>${titulo}</h2>
+      <p>Gerado em ${agora}</p>
+    </div>
+    ${container.innerHTML}`;
+  window.print();
+}
+
 function renderAll(){
   renderMetrics();renderLowStock();renderProdutos();renderMovs();renderRelatorio();renderCritico();
   renderSaldo();renderFornecedores();atualizarSelects();atualizarEstoqueDisponivel();
   renderRankingVendidos();renderRankingCaros();renderRankingMenosVendidos();renderRankingFornecedores();
+  popularFiltrosPeriodo();renderPagamentos();renderComprasLista();renderFluxoCaixa();
   setTimeout(()=>{renderChartCat();renderChartValor();renderChartMov();},100);
 }
 
@@ -1177,7 +1529,7 @@ function renderRankingFornecedores(){
 }
 
 // ── NAVEGAÇÃO (sidebar) ──
-const ALL_TABS=['dashboard','produtos','fornecedores','saldo','movimentacoes','relatorios','critico'];
+const ALL_TABS=['dashboard','produtos','fornecedores','saldo','movimentacoes','relatorios','critico','pagamentos','compras-lista','fluxocaixa'];
 function switchTab(tab){
   document.querySelectorAll('.nav-item').forEach(item=>item.classList.toggle('active',item.dataset.tab===tab));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -1188,6 +1540,9 @@ function switchTab(tab){
   if(tab==='critico') renderCritico();
   if(tab==='saldo') renderSaldo();
   if(tab==='fornecedores') renderFornecedores();
+  if(tab==='pagamentos') renderPagamentos();
+  if(tab==='compras-lista') renderComprasLista();
+  if(tab==='fluxocaixa') renderFluxoCaixa();
   if(window.innerWidth<=780) closeSidebar();
 }
 
