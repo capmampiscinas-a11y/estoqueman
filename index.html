@@ -779,11 +779,13 @@
       <div class="section" id="tab-fluxocaixa">
         <div class="section-head"><h1>📅 Fluxo de caixa</h1><p>Movimentação financeira diária (dia 01 a 31) do mês e ano selecionados.</p></div>
         <div class="card">
-          <div class="form-row">
+          <div class="form-row cols-3">
             <div class="form-group"><label>Mês</label><select id="fx-mes" class="sel-mes-obrig" onchange="renderFluxoCaixa()"></select></div>
             <div class="form-group"><label>Ano</label><select id="fx-ano" class="sel-ano-obrig" onchange="renderFluxoCaixa()"></select></div>
+            <div class="form-group"><label>Forma de pagamento</label><select id="fx-forma" class="sel-forma-filtro" onchange="renderFluxoCaixa()"></select></div>
           </div>
           <div class="top-bar" style="margin-top:2px;margin-bottom:0;justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="limparFiltrosFluxoCaixa()">✕ Limpar filtros</button>
             <button class="btn btn-green" onclick="imprimirTabela('fx-print-wrap','Fluxo de Caixa')">🖨 Gerar PDF</button>
           </div>
         </div>
@@ -1474,6 +1476,11 @@ function popularFiltrosPeriodo(){
     sel.innerHTML='<option value="">Todos</option>'+fornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
     sel.value=cur;
   });
+  document.querySelectorAll('.sel-forma-filtro').forEach(sel=>{
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Todas</option>'+getListaFormasPagamento().map(f=>`<option value="${f}">${f}</option>`).join('');
+    sel.value=cur;
+  });
 }
 
 // ── PAGAMENTOS (todos os lançamentos de venda) ──
@@ -1605,13 +1612,14 @@ function renderFluxoCaixa(){
   const mesSel=document.getElementById('fx-mes'), anoSel=document.getElementById('fx-ano');
   if(!mesSel||!anoSel) return;
   const mes=mesSel.value, ano=anoSel.value;
+  const forma=document.getElementById('fx-forma')?.value||'';
   const prefixo=ano+'-'+mes+'-';
   let acumulado=0, totalRec=0, totalPag=0, linhas='';
   for(let d=1; d<=31; d++){
     const dd=String(d).padStart(2,'0');
     const dataStr=prefixo+dd;
     const valido=diaExisteNoMes(parseInt(ano),parseInt(mes),d);
-    const receb=movs.filter(m=>m.tipo==='saida'&&m.data===dataStr).reduce((s,m)=>s+(m.qty||0)*(m.venda_unitario||0),0);
+    const receb=movs.filter(m=>m.tipo==='saida'&&m.data===dataStr&&(!forma||m.forma_pagamento===forma)).reduce((s,m)=>s+(m.qty||0)*(m.venda_unitario||0),0);
     const pag=movs.filter(m=>m.tipo==='entrada'&&m.data===dataStr).reduce((s,m)=>s+(m.qty||0)*(m.custo_unitario||0),0);
     const saldoDia=receb-pag;
     if(valido){ acumulado+=saldoDia; totalRec+=receb; totalPag+=pag; }
@@ -1630,6 +1638,11 @@ function renderFluxoCaixa(){
     <div class="saldo-summary-item">Total recebido no mês<b style="color:var(--green)">${fmt(totalRec)}</b></div>
     <div class="saldo-summary-item">Total pago no mês<b style="color:var(--red)">${fmt(totalPag)}</b></div>
     <div class="saldo-summary-item">Saldo do mês<b style="color:${(totalRec-totalPag)<0?'var(--red)':'var(--green)'}">${fmt(totalRec-totalPag)}</b></div>`;
+}
+function limparFiltrosFluxoCaixa(){
+  const formaEl=document.getElementById('fx-forma');
+  if(formaEl) formaEl.value='';
+  renderFluxoCaixa();
 }
 
 // ── IMPRESSÃO / PDF (usa o diálogo de impressão do navegador — "Salvar como PDF") ──
